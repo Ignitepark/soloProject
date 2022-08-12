@@ -128,18 +128,29 @@ public class PostManager extends DAO {
 
 	public int adminDeletePost(int postNo) {
 		int result = 0;
-		if (ReplyManager.getInstance().deleteAllReply(postNo) == 2) {
-			try {
-				conn();
-				String sql = "delete from post where post_no = ?";
-				pstmt = conn.prepareStatement(sql);
-				pstmt.setInt(1, postNo);
-				result = pstmt.executeUpdate();
-			} catch (Exception e) {
-				e.printStackTrace();
-			} finally {
-				disconnect();
-			}
+		try {
+			conn();
+			String sql3 = "delete from reply where reply_post_no = ?";
+			pstmt = conn.prepareStatement(sql3);
+			pstmt.setInt(1, postNo);
+			result += pstmt.executeUpdate();
+
+			String sql4 = "delete from post where post_no = ?";
+			pstmt = conn.prepareStatement(sql4);
+			pstmt.setInt(1, postNo);
+			result += pstmt.executeUpdate();
+
+			String sql5 = "delete from post_good where post_no = ?";
+			pstmt = conn.prepareStatement(sql5);
+			pstmt.setInt(1, postNo);
+			result += pstmt.executeUpdate();
+
+		} catch (
+
+		Exception e) {
+			e.printStackTrace();
+		} finally {
+			disconnect();
 		}
 		return result;
 	}
@@ -157,82 +168,112 @@ public class PostManager extends DAO {
 				isTrue = rs.getInt("post_member_no");
 			}
 			if (isTrue == MemberManager.mem.getMemberNo()) {
-				String sql2 = "select count(*) as count from reply where reply_post_no = ?";
-				pstmt = conn.prepareStatement(sql2);
+				String sql3 = "delete from reply where reply_post_no = ?";
+				pstmt = conn.prepareStatement(sql3);
 				pstmt.setInt(1, postNo);
-				rs = pstmt.executeQuery();
-				if (rs.next()) {
-					result = rs.getInt("count");
-				}
-				if (result > 0) {
-					System.out.println("확인");
-					String sql3 = "delete from reply where reply_post_no = ?";
-					pstmt = conn.prepareStatement(sql3);
-					pstmt.setInt(1, postNo);
-					result += pstmt.executeUpdate();
-				} else if (result == 0) {
-					result = 2;
-				}
-				if (result == 2) {
-					String sql4 = "delete from post where post_no = ? and post_member_no = ?";
-					pstmt = conn.prepareStatement(sql4);
-					pstmt.setInt(1, postNo);
-					pstmt.setInt(2, MemberManager.mem.getMemberNo());
-					int res = pstmt.executeUpdate();
-					if (result == 1) {
-						String sql5 = "delete from post_good where post_no = ?";
-						pstmt = conn.prepareStatement(sql5);
-						pstmt.setInt(1, postNo);
-						res = pstmt.executeUpdate();
-					}
-				}
+				result = pstmt.executeUpdate();
+
+				String sql4 = "delete from post where post_no = ? ";
+				pstmt = conn.prepareStatement(sql4);
+				pstmt.setInt(1, postNo);
+				result += pstmt.executeUpdate();
+
+				String sql5 = "delete from post_good where post_no = ?";
+				pstmt = conn.prepareStatement(sql5);
+				pstmt.setInt(1, postNo);
+				result += pstmt.executeUpdate();
 			}
 		} catch (Exception e) {
 			e.printStackTrace();
 		} finally {
 			disconnect();
 		}
-
 		return result;
 	}
 
 	public int updatePost(Post post) {
 		int result = 0;
-		try {
-			conn();
-			String sql = "update post set ? where post_no = ? and post_member_no = ?";
-			pstmt = conn.prepareStatement(sql);
-			pstmt.setString(1, post.getPostTitle() == null ? "post_contents" : "post_title");
-			pstmt.setInt(2, post.getPostNo());
-			pstmt.setInt(3, MemberManager.mem.getMemberNo());
-			result = pstmt.executeUpdate();
-		} catch (Exception e) {
-			e.printStackTrace();
-		} finally {
-			disconnect();
+		boolean isTrueColumn = post.getPostTitle() == null ? true : false;
+		if(isTrueColumn) {
+			try {
+				conn();
+				String sql = "update post set post_contents = ? where post_no = ? and post_member_no = ?";
+				pstmt = conn.prepareStatement(sql);
+				pstmt.setString(1, post.getPostContents());
+				pstmt.setInt(2, post.getPostNo());
+				pstmt.setInt(3, MemberManager.mem.getMemberNo());
+				result = pstmt.executeUpdate();
+			} catch (Exception e) {
+				e.printStackTrace();
+			} finally {
+				disconnect();
+			}
+		} else {
+			try {
+				conn();
+				String sql = "update post set post_title = ? where post_no = ? and post_member_no = ?";
+				pstmt = conn.prepareStatement(sql);
+				pstmt.setString(1, post.getPostTitle());
+				pstmt.setInt(2, post.getPostNo());
+				pstmt.setInt(3, MemberManager.mem.getMemberNo());
+				result = pstmt.executeUpdate();
+			} catch (Exception e) {
+				e.printStackTrace();
+			} finally {
+				disconnect();
+			}
 		}
 		return result;
 	}
 
 	public int goodPost(int postNo) {
 		int result = 0;
+		int count = 0;
 		try {
 			conn();
-			String sql1 = "select * from post_good where member_no = ? and (post_good = 1 or post_bad = 1)";
+			String sql1 = "select count(*) count from post_good where member_no = ? and post_good = 1 and post_no = ?";
 			pstmt = conn.prepareStatement(sql1);
 			pstmt.setInt(1, MemberManager.mem.getMemberNo());
+			pstmt.setInt(2, postNo);
 			rs = pstmt.executeQuery();
 			if (rs.next()) {
-				String sql2 = "delete from post_good where member_no = ?";
+				count = rs.getInt("count");
+			}
+			if (count == 1) {
+				String sql2 = "delete from post_good where member_no = ? and post_good = 1";
 				pstmt = conn.prepareStatement(sql2);
 				pstmt.setInt(1, MemberManager.mem.getMemberNo());
 				result = pstmt.executeUpdate();
+				if (result == 1) {
+					String sql5 = "update memberinfo set member_point=member_point - 1 where member_no = (select post_member_no from post where post_no = ?)";
+					pstmt = conn.prepareStatement(sql5);
+					pstmt.setInt(1, postNo);
+					result += pstmt.executeUpdate();
+					if (result == 2) {
+						String sql4 = "update memberinfo set member_point = member_point + 1 where member_no = ?";
+						pstmt = conn.prepareStatement(sql4);
+						pstmt.setInt(1, MemberManager.mem.getMemberNo());
+						result += pstmt.executeUpdate();
+					}
+				}
 			} else {
 				String sql3 = "insert into post_good(member_no,post_good,post_no) values(?,1,?)";
 				pstmt = conn.prepareStatement(sql3);
 				pstmt.setInt(1, MemberManager.mem.getMemberNo());
 				pstmt.setInt(2, postNo);
 				result = pstmt.executeUpdate();
+			}
+			if (result == 1) {
+				String sql4 = "update memberinfo set member_point = member_point - 1 where member_no = ?";
+				pstmt = conn.prepareStatement(sql4);
+				pstmt.setInt(1, MemberManager.mem.getMemberNo());
+				result += pstmt.executeUpdate();
+				if (result == 2) {
+					String sql5 = "update memberinfo set member_point=member_point+1 where member_no = (select post_member_no from post where post_no = ?)";
+					pstmt = conn.prepareStatement(sql5);
+					pstmt.setInt(1, postNo);
+					result += pstmt.executeUpdate();
+				}
 			}
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -246,12 +287,13 @@ public class PostManager extends DAO {
 		int result = 0;
 		try {
 			conn();
-			String sql1 = "select * from post_good where member_no = ? and (post_good = 1 or post_bad = 1)";
+			String sql1 = "select * from post_good where member_no = ? and post_bad = 1 and post_no = ?";
 			pstmt = conn.prepareStatement(sql1);
 			pstmt.setInt(1, MemberManager.mem.getMemberNo());
+			pstmt.setInt(2, postNo);
 			rs = pstmt.executeQuery();
 			if (rs.next()) {
-				String sql2 = "delete from post_good where member_no = ?";
+				String sql2 = "delete from post_good where member_no = ? and post_bad =1";
 				pstmt = conn.prepareStatement(sql2);
 				pstmt.setInt(1, MemberManager.mem.getMemberNo());
 				result = pstmt.executeUpdate();
